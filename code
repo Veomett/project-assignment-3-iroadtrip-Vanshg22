@@ -1,0 +1,335 @@
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.io.IOException;
+import java.util.*;
+import java.util.Map.Entry;
+
+
+class IRoadTrip {
+
+    private Map<String, Map<String, Integer>> bordersData;
+    private Map<String, Integer> capDistData;
+    private Map<String, String> stateNameData;
+    private Map<String, String> nameToCodeMap = new HashMap<>();
+
+    public IRoadTrip(String[] args) {
+        // Initialize data structures
+        initializeNameToCodeMapping();
+        bordersData = new HashMap<>();
+        capDistData = new HashMap<>();
+        stateNameData = new HashMap<>();
+
+        // Read and clean data from files
+        if (args.length >= 3) {
+            readBordersFile(args[0]);
+            cleanBordersData();
+
+            readCapDistFile(args[1]);
+            cleanCapDistData();
+
+            readStateNameFile(args[2]);
+            cleanStateNameData();
+        } else {
+            System.out.println("Insufficient arguments provided...");
+        }
+    }
+    private void initializeNameToCodeMapping() {
+        // Populate this map based on your data
+        // Example:
+        nameToCodeMap.put("UNITED STATES", "USA");
+        nameToCodeMap.put("INDIA", "IND");
+        nameToCodeMap.put("LIBERIA", "LBR");
+        nameToCodeMap.put("JAMAICA", "JAM");
+        nameToCodeMap.put("GUYANA", "GUY");
+        nameToCodeMap.put("ALGERIA", "DZA");
+        nameToCodeMap.put("SWITZERLAND", "CHE");
+        nameToCodeMap.put("ICELAND", "ISL");
+        nameToCodeMap.put("ANGUILLA", "AIA");
+        nameToCodeMap.put("PALAU", "PLW");
+        nameToCodeMap.put("CHINA", "CHN");
+        nameToCodeMap.put("YEMEN", "YEM");
+
+
+    }
+    public int getDistance(String country1, String country2) {
+        // Assuming country1 and country2 are the IDs or names used in capDistData
+        String key = country1 + "-" + country2;
+
+        // Check if the distance for this pair exists in the opposite direction
+        String reverseKey = country2 + "-" + country1;
+
+        System.out.println("Key: " + key);
+        System.out.println("Reverse Key: " + reverseKey);
+
+        Integer distance = capDistData.get(key);
+        Integer reverseDistance = capDistData.get(reverseKey);
+
+        System.out.println("Distance: " + distance);
+        System.out.println("Reverse Distance: " + reverseDistance);
+
+        if (distance != null) {
+            return distance.intValue();
+        } else if (reverseDistance != null) {
+            return reverseDistance.intValue();
+        } else {
+            // Return a default distance or handle the missing distance as needed
+            return -1; // You can change this to another value or throw an exception if desired
+        }
+    }
+
+
+
+    public List<String> findPath(String country1, String country2) {
+        Map<String, Integer> distances = new HashMap<>();
+        Map<String, String> predecessors = new HashMap<>();
+        PriorityQueue<Entry<String, Integer>> priorityQueue = new PriorityQueue<>(Map.Entry.comparingByValue());
+
+        for (String country : bordersData.keySet()) {
+            distances.put(country, Integer.MAX_VALUE);
+            predecessors.put(country, null);
+        }
+        distances.put(country1, 0);
+        priorityQueue.add(new AbstractMap.SimpleEntry<>(country1, 0));
+
+        while (!priorityQueue.isEmpty()) {
+            Entry<String, Integer> currentEntry = priorityQueue.poll();
+            String currentCountry = currentEntry.getKey();
+            int currentDistance = currentEntry.getValue();
+
+            if (!bordersData.containsKey(currentCountry)) {
+                continue;
+            }
+
+            if (currentCountry.equals(country2)) {
+                break;
+            }
+
+            for (Map.Entry<String, Integer> neighborEntry : bordersData.get(currentCountry).entrySet()) {
+                String neighbor = neighborEntry.getKey();
+                int borderLength = neighborEntry.getValue();
+                int newDistance = currentDistance + borderLength;
+
+                if (newDistance < distances.get(neighbor)) {
+                    distances.put(neighbor, newDistance);
+                    predecessors.put(neighbor, currentCountry);
+                    priorityQueue.add(new AbstractMap.SimpleEntry<>(neighbor, newDistance));
+                }
+            }
+        }
+
+        List<String> path = new ArrayList<>();
+        String step = country2;
+        if (predecessors.get(step) == null || distances.get(step) == Integer.MAX_VALUE) {
+            return null; // No path found
+        }
+
+        path.add(step);
+        while (predecessors.get(step) != null) {
+            step = predecessors.get(step);
+            path.add(0, step);
+        }
+
+        return path;
+    }
+
+
+    public void acceptUserInput() {
+        Scanner scanner = new Scanner(System.in);
+        String country1, country2;
+
+        while (true) {
+            System.out.println("Enter the name of the first country (type EXIT to quit):");
+            country1 = scanner.nextLine().trim().toUpperCase(); // Convert to uppercase
+            if (country1.equals("EXIT")) {
+                break;
+            }
+            // Check if the country name exists in your data (case-insensitive)
+            if (!stateNameData.containsValue(country1)) {
+                System.out.println("Invalid country name. Please enter a valid country name.");
+                continue;
+            }
+
+            System.out.println("Enter the name of the second country (type EXIT to quit):");
+            country2 = scanner.nextLine().trim().toUpperCase(); // Convert to uppercase
+            if (country2.equals("EXIT")) {
+                break;
+            }
+            // Check if the country name exists in your data (case-insensitive)
+            if (!stateNameData.containsValue(country2)) {
+                System.out.println("Invalid country name. Please enter a valid country name.");
+                continue;
+            }
+
+            System.out.println("Country 1: " + country1);
+            System.out.println("Country 2: " + country2);
+
+            // Print the contents of capDistData
+            System.out.println("capDistData: " + capDistData);
+
+            List<String> path = findPath(country1, country2);
+            if (path == null || path.isEmpty()) {
+                System.out.println("No path found or one of the countries does not exist.");
+                continue;
+            }
+
+            System.out.println("Route from " + country1 + " to " + country2 + ":");
+            for (int i = 0; i < path.size() - 1; i++) {
+                String fromCountry = path.get(i);
+                String toCountry = path.get(i + 1);
+                int distance = getDistance(fromCountry, toCountry);
+                System.out.println("* " + fromCountry + " --> " + toCountry + " (" + distance + " km.)");
+            }
+            break;
+        }
+        scanner.close();
+    }
+
+
+    private String getStandardizedCountryName(String inputCountryName) {
+        for (String code : stateNameData.keySet()) {
+            String countryName = stateNameData.get(code);
+            if (countryName.equalsIgnoreCase(inputCountryName)) {
+                return countryName; // Use the standardized country name
+            }
+        }
+        return null; // Country name not found
+    }
+
+
+
+
+    private void readBordersFile(String filePath) {
+        try (BufferedReader br = new BufferedReader(new FileReader(filePath))) {
+            String line;
+            while ((line = br.readLine()) != null) {
+                String[] parts = line.split(" = ");
+                String country = parts[0];
+                Map<String, Integer> neighbors = new HashMap<>();
+
+                if (parts.length > 1) {
+                    String[] borderCountries = parts[1].split("; ");
+                    for (String border : borderCountries) {
+                        String[] borderInfo = border.trim().split(" ");
+                        if (borderInfo.length < 2) continue;
+                        String neighborCountry = borderInfo[0];
+                        String borderLengthStr = borderInfo[1];
+
+                        if (borderLengthStr.matches("\\d+")) {
+                            int borderLength = Integer.parseInt(borderLengthStr);
+                            neighbors.put(neighborCountry, borderLength);
+                        }
+                    }
+                }
+                bordersData.put(country, neighbors);
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void cleanBordersData() {
+        for (String country : new HashSet<>(bordersData.keySet())) {  // Use a new HashSet to avoid concurrent modification
+            // Example: Standardize country names to uppercase
+            Map<String, Integer> neighbors = bordersData.remove(country);
+            bordersData.put(country.toUpperCase(), neighbors);
+
+            for (Map.Entry<String, Integer> entry : new HashMap<>(neighbors).entrySet()) {
+                String neighbor = entry.getKey();
+                Integer borderLength = entry.getValue();
+
+                // Handle missing or erroneous border lengths
+                if (borderLength == null || borderLength < 0) {
+                    neighbors.remove(neighbor);  // Remove this entry
+                } else {
+                    // Optionally standardize neighbor names as well
+                    neighbors.remove(neighbor);
+                    neighbors.put(neighbor.toUpperCase(), borderLength);
+                }
+            }
+        }
+    }
+
+
+
+    private void readCapDistFile(String filePath) {
+        try (BufferedReader br = new BufferedReader(new FileReader(filePath))) {
+            String line;
+            boolean isFirstLine = true; // To skip the header
+
+            while ((line = br.readLine()) != null) {
+                if (isFirstLine) {
+                    isFirstLine = false;
+                    continue; // Skip the header line
+                }
+
+                String[] values = line.split(",");
+                if (values.length >= 6 && values[4].matches("\\d+")) { // Check if the distance value is numeric
+                    String countryAId = values[1].trim(); // ID of the first country
+                    String countryBId = values[3].trim(); // ID of the second country
+                    int distanceKm = Integer.parseInt(values[4].trim()); // Distance in kilometers
+
+                    // Construct keys in the required format using the country IDs
+                    String key1 = countryAId + "-" + countryBId;
+                    String key2 = countryBId + "-" + countryAId;
+
+                    // Store the data using the constructed keys
+                    capDistData.put(key1, distanceKm);
+                    capDistData.put(key2, distanceKm);
+                }
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+
+
+    private void cleanCapDistData() {
+        for (String countryPair : new HashSet<>(capDistData.keySet())) {  // Avoid concurrent modification
+            Integer distance = capDistData.get(countryPair);
+
+            // Handle non-numeric or negative distances
+            if (distance == null || distance < 0) {
+                capDistData.remove(countryPair);  // Remove erroneous entries
+            }
+
+            // Add more conditions as necessary based on your data
+        }
+    }
+
+    private void readStateNameFile(String filePath) {
+        try (BufferedReader br = new BufferedReader(new FileReader(filePath))) {
+            String line;
+            while ((line = br.readLine()) != null) {
+                String[] values = line.split("\t");
+                if (values.length > 1) {
+                    String countryId = values[1];
+                    String countryName = values[2];
+                    stateNameData.put(countryId, countryName);
+                }
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+    private void cleanStateNameData() {
+        for (String code : new HashSet<>(stateNameData.keySet())) {  // Avoid concurrent modification
+            String countryName = stateNameData.get(code);
+
+            // Example: Remove entries with empty or null country names
+            if (countryName == null || countryName.trim().isEmpty()) {
+                stateNameData.remove(code);
+            } else {
+                // Standardize country names to uppercase
+                stateNameData.put(code, countryName.toUpperCase());
+            }
+
+            // Add more conditions as necessary
+        }
+    }
+    public static void main(String[] args) {
+        //initializeNameToCodeMapping();
+        IRoadTrip a3 = new IRoadTrip(args);
+        a3.acceptUserInput();
+    }
+}

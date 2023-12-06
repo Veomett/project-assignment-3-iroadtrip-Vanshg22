@@ -1,127 +1,187 @@
+import java.util.List;
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.PriorityQueue;
-import java.util.Map.Entry;
-import java.util.AbstractMap;
-import java.util.ArrayList;
-
-class IRoadTrip {
-
+import java.util.*;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+public class IRoadTrip {
     private Map<String, Map<String, Integer>> bordersData;
     private Map<String, Integer> capDistData;
     private Map<String, String> stateNameData;
+    private CountryNameConverter nameConverter;
 
-    public IRoadTrip(String[] args) {
-        // Initialize data structures
+
+    public IRoadTrip (String [] args) {
+        // Replace with your code
         bordersData = new HashMap<>();
         capDistData = new HashMap<>();
         stateNameData = new HashMap<>();
 
-        // Read and clean data from files
-        if (args.length >= 3) {
-            readBordersFile(args[0]);
-            cleanBordersData();  // Clean data after reading
-
-            readCapDistFile(args[1]);
-            cleanCapDistData();  // Clean data after reading
-
-            readStateNameFile(args[2]);
-            cleanStateNameData();  // Clean data after reading
-        } else {
-            System.out.println("Insufficient arguments provided...");
-        }
+        // Assuming file paths are passed in args; adjust as needed
+        readBordersFile(args[0]);
+        readCapDistFile(args[1]);
+        readStateNameFile(args[2]);
+        nameConverter = new CountryNameConverter(stateNameData);
+        nameConverter.convertBordersToIso(bordersData);
     }
 
 
     public int getDistance(String country1, String country2) {
-        // Assuming country1 and country2 are the IDs or names used in capDistData
-        String key = country1 + "-" + country2;
-
-        // Check if the distance for this pair exists in the opposite direction
-        String reverseKey = country2 + "-" + country1;
-
-        if (capDistData.containsKey(key)) {
-            return capDistData.get(key);
-        } else if (capDistData.containsKey(reverseKey)) {
-            return capDistData.get(reverseKey);
-        } else {
-            // Return some error code or throw an exception if no distance is found
-            return -1; // or throw new IllegalArgumentException("Distance not found.");
+        if (!stateNameData.containsKey(country1) || !stateNameData.containsKey(country2)) {
+            return -1;
         }
+
+        // Initialize distances map with infinite distances
+        Map<String, Integer> distances = new HashMap<>();
+        for (String country : stateNameData.keySet()) {
+            distances.put(country, Integer.MAX_VALUE);
+        }
+        distances.put(country1, 0);
+
+        // Priority queue to select the next country to visit
+        PriorityQueue<Map.Entry<String, Integer>> queue = new PriorityQueue<>(Comparator.comparingInt(Map.Entry::getValue));
+        queue.offer(new AbstractMap.SimpleEntry<>(country1, 0));
+
+        while (!queue.isEmpty()) {
+            Map.Entry<String, Integer> current = queue.poll();
+            String currentCountry = current.getKey();
+
+            // Iterate over neighbors
+            for (String neighbor : stateNameData.keySet()) {
+                String pairKey = currentCountry + "-" + neighbor;
+                if (capDistData.containsKey(pairKey)) {
+                    int distance = capDistData.get(pairKey);
+                    int newDist = distances.get(currentCountry) + distance;
+                    if (newDist < distances.get(neighbor)) {
+                        distances.put(neighbor, newDist);
+                        queue.offer(new AbstractMap.SimpleEntry<>(neighbor, newDist));
+                    }
+                }
+            }
+        }
+
+        return distances.getOrDefault(country2, -1);
     }
 
     public List<String> findPath(String country1, String country2) {
-        // Data structures for Dijkstra's algorithm
+        List<String> path = new ArrayList<>();
+
+        if (!stateNameData.containsKey(country1) || !stateNameData.containsKey(country2)) {
+            return path; // Return an empty list if either country is not in the dataset
+        }
+
+        // Initialize distances and predecessors
         Map<String, Integer> distances = new HashMap<>();
         Map<String, String> predecessors = new HashMap<>();
-        PriorityQueue<Entry<String, Integer>> priorityQueue = new PriorityQueue<>(Map.Entry.comparingByValue());
-
-        // Initialize distances as infinity and set the distance of the start node as 0
-        for (String country : bordersData.keySet()) {
+        for (String country : stateNameData.keySet()) {
             distances.put(country, Integer.MAX_VALUE);
             predecessors.put(country, null);
         }
         distances.put(country1, 0);
 
-        // Add the start node to the priority queue
-        priorityQueue.add(new AbstractMap.SimpleEntry<>(country1, 0));
+        // Priority queue for Dijkstra's algorithm
+        PriorityQueue<Map.Entry<String, Integer>> queue = new PriorityQueue<>(Comparator.comparingInt(Map.Entry::getValue));
+        queue.offer(new AbstractMap.SimpleEntry<>(country1, 0));
 
-        // Dijkstra's algorithm
-        while (!priorityQueue.isEmpty()) {
-            String currentCountry = priorityQueue.poll().getKey();
-            int currentDistance = distances.get(currentCountry);
+        while (!queue.isEmpty()) {
+            Map.Entry<String, Integer> current = queue.poll();
+            String currentCountry = current.getKey();
 
-            if (currentCountry.equals(country2)) {
-                break; // Found the shortest path to the destination
-            }
-
-            for (Map.Entry<String, Integer> neighborEntry : bordersData.get(currentCountry).entrySet()) {
-                String neighbor = neighborEntry.getKey();
-                int borderLength = neighborEntry.getValue();
-                int newDistance = currentDistance + borderLength;
-
-                if (newDistance < distances.get(neighbor)) {
-                    distances.put(neighbor, newDistance);
-                    predecessors.put(neighbor, currentCountry);
-                    priorityQueue.add(new AbstractMap.SimpleEntry<>(neighbor, newDistance));
+            // Iterate over neighbors
+            for (String neighbor : stateNameData.keySet()) {
+                String pairKey = currentCountry + "-" + neighbor;
+                if (capDistData.containsKey(pairKey)) {
+                    int distance = capDistData.get(pairKey);
+                    int newDist = distances.get(currentCountry) + distance;
+                    if (newDist < distances.get(neighbor)) {
+                        distances.put(neighbor, newDist);
+                        predecessors.put(neighbor, currentCountry);
+                        queue.offer(new AbstractMap.SimpleEntry<>(neighbor, newDist));
+                    }
                 }
             }
         }
 
-        // Reconstruct the shortest path from country1 to country2
-        List<String> path = new ArrayList<>();
-        String step = country2;
+        // Build the path from predecessors if a path exists
+        if (predecessors.get(country2) != null) {
+            Stack<String> stack = new Stack<>();
+            String currentCountry = country2;
+            while (currentCountry != null) {
+                stack.push(currentCountry);
+                currentCountry = predecessors.get(currentCountry);
+            }
 
-        // Check if a path exists
-        if (predecessors.get(step) == null) {
-            return null; // No path found
-        }
-
-        path.add(step);
-        while (predecessors.get(step) != null) {
-            step = predecessors.get(step);
-            path.add(0, step); // Insert at the beginning
+            // Pop from stack to build path in correct order
+            String prevCountry = stack.pop();
+            while (!stack.isEmpty()) {
+                String nextCountry = stack.pop();
+                path.add(prevCountry + " --> " + nextCountry + " (" + capDistData.get(prevCountry + "-" + nextCountry) + " km.)");
+                prevCountry = nextCountry;
+            }
         }
 
         return path;
     }
 
+
+
+
     public void acceptUserInput() {
-        // Implement this method based on your project's requirements
-        System.out.println("IRoadTrip - skeleton");
+        Scanner scanner = new Scanner(System.in);
+        String country1, country2;
+
+        while (true) {
+            country1 = getUserCountry(scanner, "first");
+            if (country1 == null) break; // User chose to exit
+
+            country2 = getUserCountry(scanner, "second");
+            if (country2 == null) break; // User chose to exit
+
+            List<String> path = findPath(country1, country2);
+            if (path.isEmpty()) {
+                System.out.println("No path found or one of the countries does not exist.");
+                continue;
+            }
+
+            System.out.println("Route from " + country1 + " to " + country2 + ":");
+            for (String step : path) {
+                System.out.println("* " + step);
+            }
+            break;
+        }
+        scanner.close();
     }
+
+    private String getUserCountry(Scanner scanner, String order) {
+        String country;
+        while (true) {
+            System.out.println("Enter the ISO code of the " + order + " country (type EXIT to quit):");
+            country = scanner.nextLine().trim().toUpperCase(); // ISO codes are typically in uppercase
+            if (country.equalsIgnoreCase("EXIT")) {
+                return null;
+            }
+
+            if (stateNameData.containsKey(country)) {
+                return country;
+            } else {
+                System.out.println("Invalid country ISO code. Please enter a valid ISO code.");
+            }
+        }
+    }
+
 
     private void readBordersFile(String filePath) {
         try (BufferedReader br = new BufferedReader(new FileReader(filePath))) {
             String line;
             while ((line = br.readLine()) != null) {
                 String[] parts = line.split(" = ");
-                String country = parts[0];
+                String country = parts[0].trim();
+
+                // Handle country aliases
+                String actualCountry = country.contains("(") ? country.split(" \\(")[0].trim() : country;
+
                 Map<String, Integer> neighbors = new HashMap<>();
 
                 if (parts.length > 1) {
@@ -129,8 +189,9 @@ class IRoadTrip {
                     for (String border : borderCountries) {
                         String[] borderInfo = border.trim().split(" ");
                         if (borderInfo.length < 2) continue;
+
                         String neighborCountry = borderInfo[0];
-                        String borderLengthStr = borderInfo[1];
+                        String borderLengthStr = borderInfo[1].replaceAll("[^0-9]", "");  // Remove non-numeric characters
 
                         if (borderLengthStr.matches("\\d+")) {
                             int borderLength = Integer.parseInt(borderLengthStr);
@@ -138,32 +199,12 @@ class IRoadTrip {
                         }
                     }
                 }
-                bordersData.put(country, neighbors);
+
+                // Add the country and its neighbors to the map
+                bordersData.put(actualCountry, neighbors);
             }
         } catch (IOException e) {
             e.printStackTrace();
-        }
-    }
-
-    private void cleanBordersData() {
-        for (String country : new HashSet<>(bordersData.keySet())) {  // Use a new HashSet to avoid concurrent modification
-            // Example: Standardize country names to uppercase
-            Map<String, Integer> neighbors = bordersData.remove(country);
-            bordersData.put(country.toUpperCase(), neighbors);
-
-            for (Map.Entry<String, Integer> entry : new HashMap<>(neighbors).entrySet()) {
-                String neighbor = entry.getKey();
-                Integer borderLength = entry.getValue();
-
-                // Handle missing or erroneous border lengths
-                if (borderLength == null || borderLength < 0) {
-                    neighbors.remove(neighbor);  // Remove this entry
-                } else {
-                    // Optionally standardize neighbor names as well
-                    neighbors.remove(neighbor);
-                    neighbors.put(neighbor.toUpperCase(), borderLength);
-                }
-            }
         }
     }
 
@@ -181,13 +222,15 @@ class IRoadTrip {
 
                 String[] values = line.split(",");
                 if (values.length >= 6 && values[4].matches("\\d+")) { // Check if the distance value is numeric
-                    String countryAId = values[1].trim(); // ID of the first country
-                    String countryBId = values[3].trim(); // ID of the second country
+                    String countryAId = values[1].trim(); // Country code for country A
+                    String countryBId = values[3].trim(); // Country code for country B
                     int distanceKm = Integer.parseInt(values[4].trim()); // Distance in kilometers
 
-                    // Create a key for the country pair
-                    String countryPairKey = countryAId + "-" + countryBId;
-                    capDistData.put(countryPairKey, distanceKm); // Store the data
+                    // Create a unique key for each country pair
+                    String key = countryAId + "-" + countryBId;
+
+                    // Store the data using the key
+                    capDistData.put(key, distanceKm);
                 }
             }
         } catch (IOException e) {
@@ -196,76 +239,60 @@ class IRoadTrip {
     }
 
 
-    private void cleanCapDistData() {
-        for (String countryPair : new HashSet<>(capDistData.keySet())) {  // Avoid concurrent modification
-            Integer distance = capDistData.get(countryPair);
 
-            // Handle non-numeric or negative distances
-            if (distance == null || distance < 0) {
-                capDistData.remove(countryPair);  // Remove erroneous entries
-            }
-
-            // Add more conditions as necessary based on your data
-        }
-    }
 
     private void readStateNameFile(String filePath) {
         try (BufferedReader br = new BufferedReader(new FileReader(filePath))) {
             String line;
+            SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd");
+            Map<String, Date> latestDates = new HashMap<>(); // To store the latest dates for each country
+
             while ((line = br.readLine()) != null) {
                 String[] values = line.split("\t");
-                if (values.length > 1) {
-                    String countryId = values[1];
-                    String countryName = values[2];
-                    stateNameData.put(countryId, countryName);
+                if (values.length >= 5) {
+                    String countryId = values[1].trim();
+                    String countryName = values[2].trim();
+                    Date endDate;
+
+                    try {
+                        endDate = dateFormat.parse(values[4].trim());
+                    } catch (ParseException e) {
+                        // Skip this line if the date format is incorrect
+                        continue;
+                    }
+
+                    // Compare and store the most recent date's data
+                    if (!latestDates.containsKey(countryId) || endDate.after(latestDates.get(countryId))) {
+                        latestDates.put(countryId, endDate);
+                        stateNameData.put(countryId, countryName);
+                    }
                 }
             }
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
-    private void cleanStateNameData() {
-        for (String code : new HashSet<>(stateNameData.keySet())) {  // Avoid concurrent modification
-            String countryName = stateNameData.get(code);
+    public void printStandardizedBordersData() {
+        System.out.println("Standardized Borders Data:");
+        for (Map.Entry<String, Map<String, Integer>> countryEntry : bordersData.entrySet()) {
+            String country = countryEntry.getKey();
+            Map<String, Integer> neighbors = countryEntry.getValue();
 
-            // Example: Remove entries with empty or null country names
-            if (countryName == null || countryName.trim().isEmpty()) {
-                stateNameData.remove(code);
-            } else {
-                // Standardize country names to uppercase
-                stateNameData.put(code, countryName.toUpperCase());
+            System.out.println("Country: " + country + " has borders with:");
+            for (Map.Entry<String, Integer> neighborEntry : neighbors.entrySet()) {
+                String neighbor = neighborEntry.getKey();
+                Integer borderLength = neighborEntry.getValue();
+                System.out.println("\t- " + neighbor + " (Border Length: " + borderLength + " km)");
             }
-
-            // Add more conditions as necessary
+            System.out.println(); // Adding a line break for better readability
         }
     }
 
-    private void printBordersData() {
-        for (String country : bordersData.keySet()) {
-            System.out.println("Country: " + country);
-            Map<String, Integer> neighbors = bordersData.get(country);
-            for (String neighbor : neighbors.keySet()) {
-                System.out.println(" - Neighbor: " + neighbor + ", Border Length: " + neighbors.get(neighbor) + " km");
-            }
-        }
-    }
-
-    private void printCapDistData() {
-        for (String countryPair : capDistData.keySet()) {
-            System.out.println("Country Pair: " + countryPair + ", Capital Distance: " + capDistData.get(countryPair) + " km");
-        }
-    }
-
-    private void printStateNameData() {
-        for (String code : stateNameData.keySet()) {
-            System.out.println("Code: " + code + ", Country: " + stateNameData.get(code));
-        }
-    }
 
     public static void main(String[] args) {
         IRoadTrip a3 = new IRoadTrip(args);
-        //a3.printBordersData();
-        //a3.printCapDistData();
-       // a3.printStateNameData();
+        //a3.printStandardizedBordersData();
+        a3.acceptUserInput();
     }
+
 }
