@@ -14,7 +14,7 @@ public class CountryNameConverter {
         }
     }
 
-    public void convertBordersToIso(Map<String, Map<String, Integer>> bordersData) {
+    public Map<String, Map<String, Integer>> convertBordersToIso(Map<String, Map<String, Integer>> bordersData) {
         Map<String, Map<String, Integer>> convertedBordersData = new HashMap<>();
         for (Map.Entry<String, Map<String, Integer>> entry : bordersData.entrySet()) {
             String countryIso = fullNameToIsoMapping.getOrDefault(entry.getKey(), entry.getKey());
@@ -26,9 +26,8 @@ public class CountryNameConverter {
             convertedBordersData.put(countryIso, convertedNeighbors);
         }
 
-        // Replace the original borders data with the converted data
-        bordersData.clear();
-        bordersData.putAll(convertedBordersData);
+        // Return the converted borders data
+        return convertedBordersData;
     }
 
     // Other methods...

@@ -11,21 +11,25 @@ public class IRoadTrip {
     private Map<String, Integer> capDistData;
     private Map<String, String> stateNameData;
     private CountryNameConverter nameConverter;
+    private Map<String, String> nameToCodeMapping;
 
-
-    public IRoadTrip (String [] args) {
-        // Replace with your code
+    public IRoadTrip(String[] args) {
         bordersData = new HashMap<>();
         capDistData = new HashMap<>();
         stateNameData = new HashMap<>();
 
-        // Assuming file paths are passed in args; adjust as needed
         readBordersFile(args[0]);
         readCapDistFile(args[1]);
         readStateNameFile(args[2]);
         nameConverter = new CountryNameConverter(stateNameData);
         nameConverter.convertBordersToIso(bordersData);
+
+        nameToCodeMapping = new HashMap<>();
+        for (Map.Entry<String, String> entry : stateNameData.entrySet()) {
+            nameToCodeMapping.put(entry.getValue().toLowerCase(), entry.getKey());
+        }
     }
+
 
 
     public int getDistance(String country1, String country2) {
@@ -65,60 +69,53 @@ public class IRoadTrip {
         return distances.getOrDefault(country2, -1);
     }
 
-    public List<String> findPath(String country1, String country2) {
+    public List<String> findPath(String isoCountry1, String isoCountry2) {
         List<String> path = new ArrayList<>();
-
-        if (!stateNameData.containsKey(country1) || !stateNameData.containsKey(country2)) {
+        if (!bordersData.containsKey(isoCountry1) || !bordersData.containsKey(isoCountry2)) {
             return path; // Return an empty list if either country is not in the dataset
         }
 
-        // Initialize distances and predecessors
         Map<String, Integer> distances = new HashMap<>();
         Map<String, String> predecessors = new HashMap<>();
-        for (String country : stateNameData.keySet()) {
+        PriorityQueue<String> queue = new PriorityQueue<>(Comparator.comparingInt(distances::get));
+
+        for (String country : bordersData.keySet()) {
             distances.put(country, Integer.MAX_VALUE);
             predecessors.put(country, null);
         }
-        distances.put(country1, 0);
-
-        // Priority queue for Dijkstra's algorithm
-        PriorityQueue<Map.Entry<String, Integer>> queue = new PriorityQueue<>(Comparator.comparingInt(Map.Entry::getValue));
-        queue.offer(new AbstractMap.SimpleEntry<>(country1, 0));
+        distances.put(isoCountry1, 0);
+        queue.add(isoCountry1);
 
         while (!queue.isEmpty()) {
-            Map.Entry<String, Integer> current = queue.poll();
-            String currentCountry = current.getKey();
+            String current = queue.poll();
 
-            // Iterate over neighbors
-            for (String neighbor : stateNameData.keySet()) {
-                String pairKey = currentCountry + "-" + neighbor;
-                if (capDistData.containsKey(pairKey)) {
-                    int distance = capDistData.get(pairKey);
-                    int newDist = distances.get(currentCountry) + distance;
-                    if (newDist < distances.get(neighbor)) {
-                        distances.put(neighbor, newDist);
-                        predecessors.put(neighbor, currentCountry);
-                        queue.offer(new AbstractMap.SimpleEntry<>(neighbor, newDist));
+            // Check if the destination is reached
+            if (current.equals(isoCountry2)) {
+                break;
+            }
+
+            Map<String, Integer> neighbors = bordersData.getOrDefault(current, Collections.emptyMap());
+            for (String neighbor : neighbors.keySet()) {
+                int newDist = distances.get(current) + neighbors.get(neighbor);
+                if (newDist < distances.get(neighbor)) {
+                    distances.put(neighbor, newDist);
+                    predecessors.put(neighbor, current);
+                    if (!queue.contains(neighbor)) {
+                        queue.add(neighbor);
                     }
                 }
             }
         }
 
-        // Build the path from predecessors if a path exists
-        if (predecessors.get(country2) != null) {
-            Stack<String> stack = new Stack<>();
-            String currentCountry = country2;
-            while (currentCountry != null) {
-                stack.push(currentCountry);
-                currentCountry = predecessors.get(currentCountry);
-            }
+        // Reconstruct the path from the destination back to the source
+        Stack<String> stack = new Stack<>();
+        for (String at = isoCountry2; at != null; at = predecessors.get(at)) {
+            stack.push(at);
+        }
 
-            // Pop from stack to build path in correct order
-            String prevCountry = stack.pop();
+        if (!stack.isEmpty() && stack.peek().equals(isoCountry1)) {
             while (!stack.isEmpty()) {
-                String nextCountry = stack.pop();
-                path.add(prevCountry + " --> " + nextCountry + " (" + capDistData.get(prevCountry + "-" + nextCountry) + " km.)");
-                prevCountry = nextCountry;
+                path.add(stack.pop());
             }
         }
 
@@ -126,33 +123,51 @@ public class IRoadTrip {
     }
 
 
-
-
     public void acceptUserInput() {
         Scanner scanner = new Scanner(System.in);
-        String country1, country2;
+        String isoCountry1, isoCountry2;
 
         while (true) {
-            country1 = getUserCountry(scanner, "first");
-            if (country1 == null) break; // User chose to exit
+            System.out.println("Enter the ISO code of the first country (type EXIT to quit):");
+            isoCountry1 = scanner.nextLine().trim().toUpperCase();
+            if (isoCountry1.equalsIgnoreCase("EXIT")) {
+                break;
+            }
 
-            country2 = getUserCountry(scanner, "second");
-            if (country2 == null) break; // User chose to exit
-
-            List<String> path = findPath(country1, country2);
-            if (path.isEmpty()) {
-                System.out.println("No path found or one of the countries does not exist.");
+            if (!stateNameData.containsKey(isoCountry1)) {
+                System.out.println("Invalid country ISO code. Please enter a valid ISO code.");
                 continue;
             }
 
-            System.out.println("Route from " + country1 + " to " + country2 + ":");
-            for (String step : path) {
-                System.out.println("* " + step);
+            System.out.println("Enter the ISO code of the second country (type EXIT to quit):");
+            isoCountry2 = scanner.nextLine().trim().toUpperCase();
+            if (isoCountry2.equalsIgnoreCase("EXIT")) {
+                break;
+            }
+
+            if (!stateNameData.containsKey(isoCountry2)) {
+                System.out.println("Invalid country ISO code. Please enter a valid ISO code.");
+                continue;
+            }
+
+            List<String> path = findPath(isoCountry1, isoCountry2);
+            if (path.isEmpty()) {
+                System.out.println("No path found between " + isoCountry1 + " and " + isoCountry2 + ".");
+                continue;
+            }
+
+            System.out.println("Route from " + isoCountry1 + " to " + isoCountry2 + ":");
+            for (int i = 0; i < path.size() - 1; i++) {
+                String fromCountry = path.get(i);
+                String toCountry = path.get(i + 1);
+                int distance = getDistance(fromCountry, toCountry);
+                System.out.println("* " + fromCountry + " --> " + toCountry + " (" + distance + " km.)");
             }
             break;
         }
         scanner.close();
     }
+
 
     private String getUserCountry(Scanner scanner, String order) {
         String country;
@@ -177,36 +192,35 @@ public class IRoadTrip {
             String line;
             while ((line = br.readLine()) != null) {
                 String[] parts = line.split(" = ");
+                if (parts.length < 2) continue;
+
                 String country = parts[0].trim();
-
-                // Handle country aliases
-                String actualCountry = country.contains("(") ? country.split(" \\(")[0].trim() : country;
-
                 Map<String, Integer> neighbors = new HashMap<>();
+                String[] borderCountries = parts[1].split("; ");
 
-                if (parts.length > 1) {
-                    String[] borderCountries = parts[1].split("; ");
-                    for (String border : borderCountries) {
-                        String[] borderInfo = border.trim().split(" ");
-                        if (borderInfo.length < 2) continue;
+                for (String border : borderCountries) {
+                    int lastSpaceIndex = border.lastIndexOf(' ');
+                    if (lastSpaceIndex == -1) continue;
 
-                        String neighborCountry = borderInfo[0];
-                        String borderLengthStr = borderInfo[1].replaceAll("[^0-9]", "");  // Remove non-numeric characters
+                    String neighborCountry = border.substring(0, lastSpaceIndex).trim();
+                    String borderLengthStr = border.substring(lastSpaceIndex).replaceAll("[^0-9]", "");
 
-                        if (borderLengthStr.matches("\\d+")) {
-                            int borderLength = Integer.parseInt(borderLengthStr);
-                            neighbors.put(neighborCountry, borderLength);
-                        }
+                    if (borderLengthStr.matches("\\d+")) {
+                        int borderLength = Integer.parseInt(borderLengthStr);
+                        neighbors.put(neighborCountry, borderLength);
                     }
                 }
 
-                // Add the country and its neighbors to the map
-                bordersData.put(actualCountry, neighbors);
+                // Print statement to debug the parsed data
+                System.out.println("Country: " + country + ", Neighbors: " + neighbors);
+
+                bordersData.put(country, neighbors);
             }
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
+
 
 
     private void readCapDistFile(String filePath) {
