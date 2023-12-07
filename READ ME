@@ -1,0 +1,36 @@
+Vansh Gupta
+20683066
+cs245
+
+### IRoadTrip Project Readme
+
+
+
+#### Overview
+
+This project, named `IRoadTrip`, is a Java-based application developed as part of a college assignment. Its primary function is to calculate distances and find paths between countries using data from various files that include information about country borders, distances between capitals, and country names.
+
+#### Current Status
+
+Please note that the application is currently not functioning as intended. Initially, it worked correctly, but recent issues have arisen, specifically with reading the data files. The main problem is that these files use different standardized names for countries, which has led to errors in the program.
+
+
+#### Features
+
+- **Distance Calculation**: Calculates distances between the capitals of two countries.
+- **Path Finding**: Identifies the shortest path between two countries based on their border data.
+- **User Interface**: Allows users to input ISO country codes and displays paths and distances.
+- **Data Utilization**: Uses external data files for border information, capital distances, and country names.
+
+#### Known Issues
+
+- **File Reading Problem**: The application currently has trouble reading data files. This is due to differences in the way countries are named across these files.
+- **Country Name Standardization**: There is a need for a consistent naming convention for countries in the data files. The lack of standardization is causing difficulties in processing the data.
+#### Assistance and Contributions
+
+As this is a project for educational purposes, any assistance in resolving the current issues, particularly in standardizing the country names in the data files, would be greatly appreciated.
+
+#### Acknowledgements
+
+I would like to thank my professors and classmates for their guidance and support throughout the development of this project.
+
